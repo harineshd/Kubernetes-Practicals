@@ -1,17 +1,26 @@
 # 🏷️ Topic 01: Kubernetes Labels, Selectors & Annotations
-
-## 📌 Overview & Concept Fundamentals
-
-In Kubernetes:
-- **Labels:** Key-value pairs attached to Kubernetes objects (like Pods, Services, Deployments). They are used for **identifying, grouping, and selecting** subsets of objects.
-- **Selectors:** Queries used by administrators (via `kubectl`) and controllers (Services, ReplicaSets, Deployments) to filter resources based on labels.
-  - **Equality-based Selectors:** `=`, `==`, `!=`
-  - **Set-based Selectors:** `in`, `notin`, `exists` (key only), `does not exist` (`!key`)
-- **Annotations:** Non-identifying metadata used to store build info, release notes, timestamps, tooling configs, and audit logs (not used for selection/filtering).
+## 🏥 MedTrack 3-Tier Healthcare Rollout & Audit Lab
 
 ---
 
-## 📐 Architecture & Pod Distribution
+## 📖 Table of Contents
+1. [Architecture & Cluster Topology](#-architecture--cluster-topology)
+2. [Core Concepts: Labels vs Selectors vs Annotations](#-core-concepts-labels-vs-selectors-vs-annotations)
+3. [Lab Setup Manifest](#-lab-setup-manifest)
+4. [Phase 1: Dynamic Label Operations](#-phase-1-dynamic-label-operations)
+5. [Phase 2: Selectors & Filtering (Equality & Set-Based)](#-phase-2-selectors--filtering-equality--set-based)
+6. [Phase 3: Production Break & Fix (Service Selector Mismatch)](#-phase-3-production-break--fix-service-selector-mismatch)
+7. [Phase 4: Annotations & Auditing](#-phase-4-annotations--auditing)
+8. [Summary Cheat Sheet](#-summary-cheat-sheet)
+
+---
+
+## 🏗️ Architecture & Cluster Topology
+
+This lab runs on a multi-node Kubernetes cluster (`revise`) using Kind:
+- **Control Plane:** `revise-control-plane`
+- **Worker 1:** `revise-worker`
+- **Worker 2:** `revise-worker2`
 
 ```
                                       +------------------------------------+
@@ -23,212 +32,256 @@ In Kubernetes:
             +---------------------------+                                 +---------------------------+
             |      revise-worker        |                                 |      revise-worker2       |
             +---------------------------+                                 +---------------------------+
-            | [Pod] frontend-2          |                                 | [Pod] frontend-1          |
+            | [Pod] medtrack-web-2      |                                 | [Pod] medtrack-web-1      |
             |   app=medtrack            |                                 |   app=medtrack            |
             |   tier=frontend           |                                 |   tier=frontend           |
-            |   environment=dev         |                                 |   environment=dev         |
-            |                           |                                 |   version=v1  <-- Added   |
-            | [Pod] backend-2           |                                 |                           |
-            |   app=medtrack            |                                 | [Pod] backend-1           |
-            |   tier=backend            |                                 |   app=medtrack            |
-            |   environment=prod        |                                 |   tier=backend            |
-            |                           |                                 |   environment=dev         |
-            +---------------------------+                                 |   version=v2  <-- Added   |
-                                                                          |                           |
-                                                                          | [Pod] database-1          |
-                                                                          |   app=medtrack            |
-                                                                          |   tier=database           |
-                                                                          |   environment=prod        |
-                                                                          +---------------------------+
+            |   environment=prod        |                                 |   environment=staging     |
+            |   release=canary          |                                 |                           |
+            |                           |                                 | [Pod] medtrack-api-1      |
+            | [Pod] medtrack-api-2      |                                 |   app=medtrack            |
+            |   app=medtrack            |                                 |   tier=backend            |
+            |   tier=backend            |                                 |   environment=dev         |
+            |   environment=prod        |                                 |                           |
+            |                           |                                 | [Pod] medtrack-db-primary |
+            | [Pod] medtrack-db-replica |                                 |   app=medtrack            |
+            |   app=medtrack            |                                 |   tier=database           |
+            |   tier=database           |                                 |   environment=prod        |
+            |   environment=prod        |                                 |   (backup-schedule)       |
+            +---------------------------+                                 +---------------------------+
 ```
 
 ---
 
-## 📋 Initial Cluster State Matrix
+## 💡 Core Concepts: Labels vs Selectors vs Annotations
 
-| Pod Name | App | Tier | Environment | Version | Node | Status |
-|---|---|---|---|---|---|---|
-| `frontend-1` | `medtrack` | `frontend` | `dev` | `v1` | `revise-worker2` | `Running` |
-| `frontend-2` | `medtrack` | `frontend` | `dev` | *(none)* | `revise-worker` | `Running` |
-| `backend-1` | `medtrack` | `backend` | `dev` | `v2` | `revise-worker2` | `Running` |
-| `backend-2` | `medtrack` | `backend` | `prod` | *(none)* | `revise-worker` | `Running` |
-| `database-1` | `medtrack` | `database` | `prod` | *(none)* | `revise-worker2` | `Running` |
-
----
-
-## 🚀 Scenario 1: Easy – Basic Labeling & Equality Filtering
-
-### Task 1: Add `version=v1` label to `frontend-1`
-```bash
-kubectl label pod frontend-1 version=v1
-```
-*Verification:*
-```bash
-kubectl get pod frontend-1 --show-labels
-```
+| Feature | Labels | Annotations |
+| :--- | :--- | :--- |
+| **Purpose** | **Identification & Grouping** of objects | **Non-identifying metadata** (Audit, Release, Tools) |
+| **Used by Selectors?** | **YES** (Services, Deployments, `kubectl -l`) | **NO** (Cannot be queried via label selectors) |
+| **Query Syntax** | Equality (`=`, `!=`) & Set-based (`in`, `notin`) | Read directly via `describe` or JSONPath |
+| **Max Size** | 63 characters per value | Up to 256 KB (large configs, certificates, JSON) |
+| **Real-world Examples** | `environment: prod`, `tier: frontend` | `git-commit: 8f2a1b`, `backup-schedule: 0 2 * * *` |
 
 ---
 
-### Task 2: Add `version=v2` label to `backend-1`
+## 📄 Lab Setup Manifest
+
+The 6 application pods were provisioned using [`lab01-pods.yaml`](./lab01-pods.yaml):
+- 2 Frontend Pods: `medtrack-web-1` (dev), `medtrack-web-2` (prod)
+- 2 API Backend Pods: `medtrack-api-1` (dev), `medtrack-api-2` (prod)
+- 2 Database Pods: `medtrack-db-primary` (prod), `medtrack-db-replica` (prod)
+
 ```bash
-kubectl label pod backend-1 version=v2
-```
-*Verification:*
-```bash
-kubectl get pod backend-1 --show-labels
+kubectl apply -f lab01-pods.yaml
 ```
 
 ---
 
-### Task 3: Display all Pods with `app=medtrack`
+## ⚡ Phase 1: Dynamic Label Operations
+
+Imperative label management allows operational updates on live resources without restarting containers.
+
+### Task 1: Add `release=canary` to `medtrack-web-2`
 ```bash
-kubectl get pods -l app=medtrack
+kubectl label pod medtrack-web-2 release=canary
 ```
-*Expected Output:* All 5 pods (`frontend-1`, `frontend-2`, `backend-1`, `backend-2`, `database-1`).
 
----
-
-### Task 4: Display only `tier=backend` Pods
+### Task 2: Add `team=backend-core` to `medtrack-api-2`
 ```bash
-kubectl get pods -l tier=backend
+kubectl label pod medtrack-api-2 team=backend-core
 ```
-*Expected Output:* `backend-1`, `backend-2`.
 
----
-
-### Task 5: Display only `environment=dev` Pods
+### Task 3: Overwrite `environment=dev` to `environment=staging` on `medtrack-web-1`
+> **Important:** If a label key already exists, `kubectl` rejects modifications unless `--overwrite` is explicitly provided.
 ```bash
-kubectl get pods -l environment=dev
+kubectl label pod medtrack-web-1 environment=staging --overwrite
 ```
-*Expected Output:* `frontend-1`, `frontend-2`, `backend-1`.
 
----
-
-### Task 6: Display Pods matching BOTH `tier=frontend` AND `environment=dev`
+### Task 4: Remove `team` label from `medtrack-api-2`
+> **Syntax:** To remove a label, append a minus sign (`-`) to the key name.
 ```bash
-kubectl get pods -l tier=frontend,environment=dev
-```
-*Expected Output:* `frontend-1`, `frontend-2`.
-
----
-
-### Task 7: Identify Pod with `version=v1`
-```bash
-kubectl get pods -l version=v1
-```
-*Expected Output:* `frontend-1`.
-
----
-
-### Task 8: Display all Pods showing their labels
-```bash
-kubectl get pods --show-labels
+kubectl label pod medtrack-api-2 team-
 ```
 
 ---
 
-## ⚡ Scenario 2: Intermediate – Set-Based Filtering & Multi-Label Logic
+## 🔍 Phase 2: Selectors & Filtering (Equality & Set-Based)
 
-Set-based requirements allow rich queries using `in`, `notin`, and key presence:
+Selectors allow operators and Kubernetes controllers to query resources precisely.
 
-### 1. Assign Production Labels
+### Task 5: Multi-Condition Equality (`app=medtrack` AND `environment=prod`)
 ```bash
-# Add or overwrite labels using --overwrite flag
-kubectl label pod frontend-1 frontend-2 app=medtrack tier=frontend environment=prod --overwrite
-kubectl label pod backend-1 backend-2 tier=backend --overwrite
-kubectl label pod database-1 tier=database --overwrite
+kubectl get pods -l app=medtrack,environment=prod
+```
+**Output:**
+```text
+NAME                  READY   STATUS    AGE
+medtrack-api-2        1/1     Running   25m
+medtrack-db-primary   1/1     Running   25m
+medtrack-db-replica   1/1     Running   25m
+medtrack-web-2        1/1     Running   25m
 ```
 
-### 2. Query: `tier in (frontend, backend)`
+---
+
+### Task 6: Inequality Selector (`environment!=prod`)
+Selects non-production pods (`dev`, `staging`):
+```bash
+kubectl get pods -l 'environment!=prod'
+```
+**Output:**
+```text
+NAME             READY   STATUS    AGE
+medtrack-api-1   1/1     Running   25m
+medtrack-web-1   1/1     Running   25m
+```
+
+---
+
+### Task 7: Set-Based `in` Selector (`tier in (frontend, api, backend)`)
+Filter pods belonging to specific tiers:
 ```bash
 kubectl get pods -l 'tier in (frontend, backend)'
 ```
-
-### 3. Query: `environment != dev`
-```bash
-kubectl get pods -l 'environment != dev'
-# Or set-based:
-kubectl get pods -l 'environment notin (dev)'
-```
-
-### 4. Query: Pods that have the `tier` label (Key exists)
-```bash
-kubectl get pods -l 'tier'
-```
-
-### 5. Query: Pods that DO NOT have the `tier` label (Key does not exist)
-```bash
-kubectl get pods -l '!tier'
+**Output:**
+```text
+NAME             READY   STATUS    AGE
+medtrack-api-1   1/1     Running   25m
+medtrack-api-2   1/1     Running   25m
+medtrack-web-1   1/1     Running   25m
+medtrack-web-2   1/1     Running   25m
 ```
 
 ---
 
-## 🛠️ Scenario 3: Break & Fix – Service Selector Mismatch
-
-### Problem:
-A Service is created with:
-```yaml
-selector:
-  app: medtrack
-  tier: backend
-```
-However, the Backend Pods have:
-```yaml
-labels:
-  app: medtrack
-  tier: api
-```
-As a result:
+### Task 8: Set-Based `notin` Selector (`environment notin (dev, staging)`)
+Filter pods that do NOT belong to development or staging environments:
 ```bash
-kubectl get endpoints backend-service
-# Output: ENDPOINTS: <none>
+kubectl get pods -l 'environment notin (dev, staging)'
 ```
-
-### Root Cause:
-Service endpoints controller uses exact label matching. `tier: backend` does not match `tier: api`.
-
-### Solution Options:
-1. **Option A (Fix Service):** Update Service `spec.selector.tier: api`
-2. **Option B (Fix Pods - Recommended in standard architecture):** Re-label Pods:
-```bash
-kubectl label pod backend-1 backend-2 tier=backend --overwrite
-```
-3. **Verify Endpoints:**
-```bash
-kubectl get endpoints <service-name>
+**Output:**
+```text
+NAME                  READY   STATUS    AGE
+medtrack-api-2        1/1     Running   25m
+medtrack-db-primary   1/1     Running   25m
+medtrack-db-replica   1/1     Running   25m
+medtrack-web-2        1/1     Running   25m
 ```
 
 ---
 
-## 📝 Scenario 4: Annotations (Metadata & Auditing)
-
-Annotations are used for system information, audit logs, and tool integrations (e.g., Helm, Ingress, Istio).
-
-### Task 1: Add annotations
+### Task 9: Key Existence Check (`release` label exists)
+Find any pod that has the `release` key, regardless of value:
 ```bash
-# Add owner annotation
-kubectl annotate pod frontend-1 owner="Frontend Team"
-
-# Add git commit SHA
-kubectl annotate pod backend-1 git-commit="a1b2c3d"
-
-# Add database description
-kubectl annotate pod database-1 description="MedTrack PostgreSQL Database"
+kubectl get pods -l 'release'
+```
+**Output:**
+```text
+NAME             READY   STATUS    AGE
+medtrack-web-2   1/1     Running   25m
 ```
 
-### Task 2: Update an existing annotation (`--overwrite`)
+---
+
+### Task 10: Key Non-Existence Check (`release` label missing)
+Find all pods that do NOT have the `release` key:
 ```bash
-kubectl annotate pod backend-1 git-commit="f4e5d6c" --overwrite
+kubectl get pods -l '!release'
+```
+**Output:**
+```text
+NAME                  READY   STATUS    AGE
+medtrack-api-1        1/1     Running   25m
+medtrack-api-2        1/1     Running   25m
+medtrack-db-primary   1/1     Running   25m
+medtrack-db-replica   1/1     Running   25m
+medtrack-web-1        1/1     Running   25m
 ```
 
-### Task 3: Inspect Pod annotations
+---
+
+## 🛠️ Phase 3: Production Break & Fix (Service Selector Mismatch)
+
+### The Incident:
+A Kubernetes Service was provisioned to route traffic to the MedTrack backend with the following selector:
+```yaml
+spec:
+  selector:
+    app: medtrack
+    tier: backend
+```
+However, the running API pods were initially labeled with `tier: api`. Because of this mismatch, the Service controller found **0 endpoints** (`ENDPOINTS: <none>`), causing total API downtime.
+
+### The Resolution (In-Place Relabeling):
+Instead of recreating or restarting the pods, update the label dynamically on both pods:
 ```bash
-kubectl describe pod backend-1 | Select-String -Pattern "Annotations" -Context 0,5
-# Or using jsonpath:
-kubectl get pod backend-1 -o jsonpath='{.metadata.annotations}'
+kubectl label pod medtrack-api-1 medtrack-api-2 tier=backend --overwrite
 ```
 
-### Task 4: Remove an annotation (suffix with `-`)
+### Verification:
 ```bash
-kubectl annotate pod frontend-1 owner-
+kubectl get pods -l tier=backend --show-labels
 ```
+**Output:**
+```text
+NAME             READY   STATUS    LABELS
+medtrack-api-1   1/1     Running   app=medtrack,environment=dev,tier=backend
+medtrack-api-2   1/1     Running   app=medtrack,environment=prod,tier=backend
+```
+Now the Service automatically detects both pods and attaches them to its Endpoints slice without downtime.
+
+---
+
+## 📝 Phase 4: Annotations & Auditing
+
+Annotations attach rich operational metadata for DevOps automation, audit trails, and backup tooling.
+
+### Task 13: Add Audit & Backup Annotations
+```bash
+# Add backup schedule and owner to DB pod
+kubectl annotate pod medtrack-db-primary backup-schedule="0 2 * * *" owner="DBA Team"
+
+# Add git build commit to API pod
+kubectl annotate pod medtrack-api-1 build-commit="a1b2c3d"
+```
+
+### Task 14: Overwrite / Update Annotation
+When a new build is deployed, update the metadata:
+```bash
+kubectl annotate pod medtrack-api-1 build-commit="f9e8d7c" --overwrite
+```
+
+### Task 15: Inspect Annotations
+```bash
+# Inspect via describe
+kubectl describe pod medtrack-db-primary | Select-String -Pattern "Annotations" -Context 0,3
+
+# Or extract clean JSON using JSONPath
+kubectl get pod medtrack-db-primary -o jsonpath='{.metadata.annotations}'
+```
+
+### Task 16: Remove Annotation
+To delete an annotation, append `-` to the annotation key:
+```bash
+kubectl annotate pod medtrack-db-primary owner-
+```
+
+---
+
+## 📌 Summary Cheat Sheet
+
+| Action | Command Example |
+| :--- | :--- |
+| **Add Label** | `kubectl label pod <pod-name> <key>=<val>` |
+| **Overwrite Label** | `kubectl label pod <pod-name> <key>=<val> --overwrite` |
+| **Remove Label** | `kubectl label pod <pod-name> <key>-` |
+| **Equality Selector** | `kubectl get pods -l app=medtrack,environment=prod` |
+| **Inequality Selector** | `kubectl get pods -l 'environment!=prod'` |
+| **Set-Based (in)** | `kubectl get pods -l 'tier in (frontend, backend)'` |
+| **Set-Based (notin)** | `kubectl get pods -l 'environment notin (dev, staging)'` |
+| **Key Exists** | `kubectl get pods -l 'release'` |
+| **Key Does Not Exist** | `kubectl get pods -l '!release'` |
+| **Add Annotation** | `kubectl annotate pod <pod-name> <key>="<val>"` |
+| **Update Annotation** | `kubectl annotate pod <pod-name> <key>="<val>" --overwrite` |
+| **Remove Annotation** | `kubectl annotate pod <pod-name> <key>-` |
+| **Display Labels** | `kubectl get pods --show-labels` |

@@ -36,7 +36,7 @@ Welcome to the **Kubernetes Practical Labs** repository. This repository documen
 
 | # | Topic | Folder | Status |
 |---|---|---|---|
-| 01 | **Labels, Selectors & Annotations** | [`01-labels-selectors-annotations/`](./01-labels-selectors-annotations/) | 🟡 In Progress |
+| 01 | **Labels, Selectors & Annotations** | [`01-labels-selectors-annotations/`](./01-labels-selectors-annotations/) | 🟢 Completed |
 | 02 | **Services + Labels & Selectors** | `02-services-and-networking/` | ⏳ Upcoming |
 | 03 | **ReplicaSet & Self-Healing** | `03-replicasets-and-scaling/` | ⏳ Upcoming |
 | 04 | **Namespaces & Multi-Tenancy** | `04-namespaces-and-quotas/` | ⏳ Upcoming |

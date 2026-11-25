@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-web-1
+  labels:
+    app: medtrack
+    tier: frontend
+    environment: dev
+spec:
+  containers:
+    - name: web
+      image: nginx:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-web-2
+  labels:
+    app: medtrack
+    tier: frontend
+    environment: prod
+spec:
+  containers:
+    - name: web
+      image: nginx:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-api-1
+  labels:
+    app: medtrack
+    tier: api
+    environment: dev
+spec:
+  containers:
+    - name: api
+      image: nginx:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-api-2
+  labels:
+    app: medtrack
+    tier: api
+    environment: prod
+spec:
+  containers:
+    - name: api
+      image: nginx:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-db-primary
+  labels:
+    app: medtrack
+    tier: database
+    environment: prod
+spec:
+  containers:
+    - name: db
+      image: redis:alpine
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-db-replica
+  labels:
+    app: medtrack
+    tier: database
+    environment: prod
+spec:
+  containers:
+    - name: db
+      image: redis:alpine

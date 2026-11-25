@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-1
+  labels:
+    app: medtrack
+    tier: frontend
+    environment: dev
+spec:
+  containers:
+    - name: frontend
+      image: nginx:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-2
+  labels:
+    app: medtrack
+    tier: frontend
+    environment: dev
+spec:
+  containers:
+    - name: frontend
+      image: nginx:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-1
+  labels:
+    app: medtrack
+    tier: backend
+    environment: dev
+spec:
+  containers:
+    - name: backend
+      image: nginx:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-2
+  labels:
+    app: medtrack
+    tier: backend
+    environment: prod
+spec:
+  containers:
+    - name: backend
+      image: nginx:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: database-1
+  labels:
+    app: medtrack
+    tier: database
+    environment: prod
+spec:
+  containers:
+    - name: database
+      image: mysql:8.0
+      env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root123"

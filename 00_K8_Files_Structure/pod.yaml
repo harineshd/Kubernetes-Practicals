@@ -1,0 +1,76 @@
+# ==============================================================================
+# Kubernetes Pod Manifest Structure
+# ==============================================================================
+# A Pod is the smallest deployable unit of computing that you can create and
+# manage in Kubernetes. It encapsulates one or more tightly coupled containers.
+# ==============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: medtrack-backend-pod
+  namespace: default
+  labels:
+    app: medtrack
+    tier: backend
+    environment: dev
+    version: v1
+  annotations:
+    build.version: "1.0.4"
+    maintainer: "DevOps Team <devops@medtrack.local>"
+    description: "MedTrack backend API service running Node.js runtime"
+
+spec:
+  # Pod restart policy: Always, OnFailure, Never
+  restartPolicy: Always
+
+  # Grace period allowed before Kubernetes forcibly kills running containers
+  terminationGracePeriodSeconds: 30
+
+  containers:
+    - name: backend-container
+      image: nginx:alpine
+      imagePullPolicy: IfNotPresent
+
+      # Container network ports exposed
+      ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+
+      # Environment variables passed into container process
+      env:
+        - name: APP_ENV
+          value: "development"
+        - name: PORT
+          value: "80"
+        - name: DB_HOST
+          value: "medtrack-db-service"
+
+      # Compute resource requests and limits
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+
+      # Health checks
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 15
+        periodSeconds: 20
+        timeoutSeconds: 5
+        failureThreshold: 3
+
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 2
+        failureThreshold: 2

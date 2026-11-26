@@ -1,0 +1,35 @@
+# ==============================================================================
+# Kubernetes Service Manifest Structure
+# ==============================================================================
+# An abstract way to expose an application running on a set of Pods as a network
+# service. Kubernetes gives Pods their own IP addresses and a single DNS name for
+# a set of Pods, and can load-balance across them.
+# ==============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: medtrack-backend-service
+  namespace: default
+  labels:
+    app: medtrack
+    tier: backend
+
+spec:
+  # Service Type: ClusterIP (Internal only), NodePort (Node IP:Port), LoadBalancer (Cloud Provider)
+  type: ClusterIP
+
+  # Selector matching target Pod labels
+  selector:
+    app: medtrack
+    tier: backend
+
+  # Port definitions:
+  # - port: Port exposed by the Service inside the cluster
+  # - targetPort: Port on the container where the application listens
+  # - protocol: TCP (default) or UDP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 80
+      protocol: TCP

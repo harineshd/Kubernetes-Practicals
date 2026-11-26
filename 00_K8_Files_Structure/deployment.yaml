@@ -1,0 +1,86 @@
+# ==============================================================================
+# Kubernetes Deployment Manifest Structure
+# ==============================================================================
+# A Deployment provides declarative updates for Pods and ReplicaSets.
+# You describe a desired state in a Deployment, and the Deployment Controller
+# changes the actual state to the desired state at a controlled rate.
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medtrack-backend-deployment
+  namespace: default
+  labels:
+    app: medtrack
+    tier: backend
+    environment: dev
+  annotations:
+    kubernetes.io/change-cause: "Initial production rollout v1.0"
+
+spec:
+  # Desired scale
+  replicas: 3
+
+  # Revision history limit for rollbacks
+  revisionHistoryLimit: 10
+
+  # Rollout strategy: RollingUpdate (zero downtime) or Recreate
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Max additional pods created during rollout
+      maxUnavailable: 0  # Zero downtime: all pods must be available during rollout
+
+  # Selector matching the template labels
+  selector:
+    matchLabels:
+      app: medtrack
+      tier: backend
+
+  # Pod template specifications
+  template:
+    metadata:
+      labels:
+        app: medtrack
+        tier: backend
+        environment: dev
+        version: v1
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: backend-container
+          image: nginx:alpine
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 80
+
+          env:
+            - name: APP_ENV
+              value: "development"
+            - name: DB_HOST
+              value: "medtrack-db-service"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

@@ -36,6 +36,7 @@ Welcome to the **Kubernetes Practical Labs** repository. This repository documen
 
 | # | Topic | Folder | Status |
 |---|---|---|---|
+| 00 | **Kubernetes Files & YAML Architecture** | [`00_K8_Files_Structure/`](./00_K8_Files_Structure/) | 🟢 Completed |
 | 01 | **Labels, Selectors & Annotations** | [`01-labels-selectors-annotations/`](./01-labels-selectors-annotations/) | 🟢 Completed |
 | 02 | **Services + Labels & Selectors** | `02-services-and-networking/` | ⏳ Upcoming |
 | 03 | **ReplicaSet & Self-Healing** | `03-replicasets-and-scaling/` | ⏳ Upcoming |
@@ -50,7 +51,13 @@ Welcome to the **Kubernetes Practical Labs** repository. This repository documen
 ```text
 Kubernetes-Practicals/
 ├── README.md                                # Root repository guide
+├── 00_K8_Files_Structure/                   # Topic 00: YAML & Core Manifest Templates
+│   ├── README.md                            # Comprehensive YAML & K8s Architecture Guide
+│   ├── pod.yaml                             # Pod manifest template
+│   ├── replicaset.yaml                      # ReplicaSet manifest template
+│   ├── deployment.yaml                      # Deployment manifest template
+│   └── service.yaml                         # Service manifest template
 └── 01-labels-selectors-annotations/         # Topic 01 Lab
     ├── README.md                            # Comprehensive scenario documentation
-    └── pods.yaml                            # 5-Pod MedTrack manifest
+    └── lab01-pods.yaml                      # 6-Pod MedTrack manifest
 ```
